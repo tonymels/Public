@@ -1,0 +1,123 @@
+Function Get-HardwareDetails () {
+
+
+		# Create a new Session
+	$wmiCS = Get-CimInstance -Class Win32_ComputerSystem
+	$wmiBIOS = Get-CimInstance -Class Win32_BIOS
+	$wmiCPU = Get-CimInstance -Class win32_processor
+	#$wmiTPM = Get-CimInstance -Class Win32_Tpm
+	$wmiMDM = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -Class MDM_DevDetail_Ext01 -Filter "InstanceID='Ext' AND ParentID='./DevDetail'"
+	$wmiOS = Get-CimInstance  -Class Win32_OperatingSystem
+	$wmiSoftware = Get-WmiObject -Class Win32_Product
+	$wmiPrinters = Get-WMIObject -Class Win32_Printer
+
+	$ReturnObject = @{
+		HardwareHash = $wmiMDM.DeviceHardwareData
+		Make = $wmiCS.Manufacturer.Trim()
+		Model = $wmiCS.Model.Trim()
+		Serial = $wmiBIOS.SerialNumber
+		RAM = [math]::Round((($wmiCS).TotalPhysicalMemory / 1GB),0)
+		CPU = $wmiCPU.Name
+		OSVersion = $wmiOS.Caption + ' / ' + $wmiOS.Version
+		User = $env:USERNAME
+		Domain = $env:USERDOMAIN
+		SoftwareInstalled = $wmiSoftware.Name
+		Printers = $wmiPrinters.Name
+		ComputerName = $env:COMPUTERNAME
+	}
+	return $ReturnObject
+	
+}
+
+# end of funtions block
+$Data = Get-HardwareDetails
+
+$HtmlBody = 
+@"
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Device Information</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Device Information - $($Data.ComputerName)</h1>
+    <table>
+    <tr>
+            <th>Computer</th>
+            <td>$($Data.ComputerName)</td>
+        </tr>
+        <tr>
+            <th>Domain</th>
+            <td>$($Data.Domain)</td>
+        </tr>
+        <tr>
+            <th>Make</th>
+            <td>$($Data.Make)</td>
+        </tr>
+        <tr>
+            <th>Printers</th>
+            <td>$($Data.Printers|%{$_+','})</td>
+        </tr>
+        <tr>
+            <th>CPU</th>
+            <td>$($Data.CPU)</td>
+        </tr>
+        <tr>
+            <th>RAM</th>
+            <td>$($Data.RAM)</td>
+        </tr>
+        <tr>
+            <th>OSVersion</th>
+            <td>$($Data.OSVersion)</td>
+        </tr>
+        <tr>
+            <th>Model</th>
+            <td>$($Data.Model)</td>
+        </tr>
+        <tr>
+            <th>Serial</th>
+            <td>$($Data.Serial)</td>
+        </tr>
+        <tr>
+            <th>User</th>
+            <td>$($Data.User)</td>
+        </tr>
+        <tr>
+            <th>Hardware Hash</th>
+            <td>$($Data.HardwareHash)</td>
+        </tr>
+    </table>
+    <h1>Software Installed</h1>
+    <table>
+
+"@
+
+$HtmlBody += $Data.SoftwareInstalled|sort|%{
+"<tr><td>$_</td></tr>"
+}
+
+$HtmlBody += @"
+</table>
+</body>
+</html>
+"@
+
+$HtmlBody|Out-File "DeviceInformation.html" -Force
